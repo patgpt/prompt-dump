@@ -1,0 +1,91 @@
+---
+alwaysApply: true
+glob: "**/*.tsx,ts"
+description: Typescript Best Practices according to me.
+---
+
+# TypeScript Best Practices
+
+## Code Quality
+
+- Use strict type checking (`strict: true` in tsconfig.json)
+- Enable all strict type checking options
+- **NEVER use `any` type** - use `unknown` instead when type cannot be determined
+- **NEVER use type assertions (`as`)** - prefer type guards and type predicates
+- Prefer interfaces over type aliases for object shapes
+- Use const assertions for read-only data
+
+## Type Safety
+
+- Always define return types for functions (except simple arrow functions)
+- Use discriminated unions for better type narrowing
+- Leverage utility types: `Partial`, `Required`, `Pick`, `Omit`, `Record`
+- Use `as const` for literal types and read-only arrays/objects
+- Avoid type assertions (`as`); prefer type guards and type predicates
+
+## Error Handling
+
+- Use `never` type for functions that never return (throw or infinite loop)
+- Handle all cases in switch statements with exhaustive checking
+- Use non-null assertion operator (`!`) sparingly and document why it's safe
+
+## Performance
+
+- Use `const` instead of `let`/`var` when possible
+- Prefer `readonly` modifier for properties that don't change
+- Use module augmentation instead of monkey patching
+- Avoid circular dependencies in module imports
+
+## Modern Features
+
+- Use optional chaining (`?.`) and nullish coalescing (`??`)
+- Leverage template literal types for advanced type manipulation
+- Use mapped types for transforming existing types
+- Prefer arrow functions over function expressions
+- Use async/await over Promise chains
+
+## React/JSX (if applicable)
+
+- Use `React.FC<>` or `React.VFC<>` for function components with proper typing
+- Define proper types for props and state
+- Use `keyof typeof` for object key types
+- Prefer `useCallback` and `useMemo` for expensive computations
+- Type event handlers properly: `React.MouseEvent<HTMLButtonElement>`
+
+## Testing
+
+- Write tests for all public APIs
+- Use type-only imports in test files when possible
+- Mock dependencies with proper TypeScript types
+- Test error conditions and edge cases
+
+## Documentation
+
+- Use JSDoc comments for public APIs
+- Document complex types with examples
+- Keep comments up-to-date with code changes
+- Use `@param`, `@returns`, `@example` tags in JSDoc
+
+## ESLint/Prettier
+
+- **Prefer Biome** for fast, all-in-one linting, formatting, and import sorting
+- Use `@typescript-eslint` plugin suite only if Biome doesn't meet requirements
+- Enable rules for unused variables, implicit any, strict null checks
+- Configure consistent formatting with Prettier (or Biome's formatter)
+- Use import sorting and organization tools
+
+## Project Structure
+
+- Organize code by feature/domain rather than by type
+- Use barrel exports (index.ts) for clean imports
+- Separate types into dedicated files when they become complex
+- Use path mapping for cleaner import statements
+
+## Advanced Patterns
+
+- Use conditional types for advanced type logic
+- Leverage branded types for creating distinct types
+- Use assertion functions for runtime type checking
+- Implement proper error boundaries in React applications
+
+---

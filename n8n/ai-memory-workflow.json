@@ -1,0 +1,458 @@
+{
+  "name": "AI Memory System with Vector Storage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "memory",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-input",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "user_id",
+              "value": "={{ $json.user_id || 'default' }}"
+            },
+            {
+              "name": "session_id",
+              "value": "={{ $json.session_id || 'default' }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-input-data",
+      "name": "Extract Input Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "contents": [
+            {
+              "parts": [
+                {
+                  "text": "Classify this message into one of these categories: conversation, question, instruction, reflection, planning, creative, technical, personal. Return only the category name."
+                }
+              ]
+            },
+            {
+              "parts": [
+                {
+                  "text": "={{ $json.message }}"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "classify-message",
+      "name": "Classify Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "category",
+              "value": "={{ $json.data.candidates[0].content.parts[0].text.trim() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "add-classification",
+      "name": "Add Classification",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "content": {
+            "parts": [
+              {
+                "text": "={{ $json.message }}"
+              }
+            ]
+          }
+        },
+        "options": {}
+      },
+      "id": "generate-embedding",
+      "name": "Generate Embedding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [720, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO memory_chunks (id, user_id, session_id, message, category, embedding, timestamp) VALUES ($1, $2, $3, $4, $5, $6::vector, $7) ON CONFLICT (id) DO UPDATE SET message = $4, category = $5, embedding = $6::vector, timestamp = $7",
+        "queryParams": "array",
+        "queryParamsArray": [
+          {
+            "type": "string",
+            "value": "={{ 'msg_' + $now.format('x') }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.user_id }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.session_id }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.message }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.category }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ '[' + $json.embedding.data[0].embedding.join(',') + ']' }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.timestamp }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "store-in-postgres",
+      "name": "Store in PostgreSQL",
+      "type": "n8n-nodes-base.postgreSql",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE EXTENSION IF NOT EXISTS vector;",
+        "options": {}
+      },
+      "id": "setup-vector-extension",
+      "name": "Setup Vector Extension",
+      "type": "n8n-nodes-base.postgreSql",
+      "typeVersion": 1,
+      "position": [480, 500]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS memory_chunks (id TEXT PRIMARY KEY, user_id TEXT, session_id TEXT, message TEXT, category TEXT, embedding vector(1536), timestamp TIMESTAMP)",
+        "options": {}
+      },
+      "id": "create-memory-table",
+      "name": "Create Memory Table",
+      "type": "n8n-nodes-base.postgreSql",
+      "typeVersion": 1,
+      "position": [720, 500]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, message, category, 1 - (embedding <=> $1::vector) as similarity FROM memory_chunks WHERE user_id = $2 AND session_id = $3 ORDER BY embedding <=> $1::vector LIMIT 10",
+        "queryParams": "array",
+        "queryParamsArray": [
+          {
+            "type": "string",
+            "value": "={{ '[' + $json.embedding.data[0].embedding.join(',') + ']' }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.user_id }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ $json.session_id }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "retrieve-similar-memories",
+      "name": "Retrieve Similar Memories",
+      "type": "n8n-nodes-base.postgreSql",
+      "typeVersion": 1,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO memgraph_nodes (id, type, properties) VALUES ($1, 'message', $2::jsonb) ON CONFLICT (id) DO UPDATE SET properties = $2::jsonb",
+        "queryParams": "array",
+        "queryParamsArray": [
+          {
+            "type": "string",
+            "value": "={{ $json.id }}"
+          },
+          {
+            "type": "string",
+            "value": "={{ ({message: $json.message, category: $json.category, timestamp: $json.timestamp}) | toJsonString }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "store-in-memgraph",
+      "name": "Store in Memgraph",
+      "type": "n8n-nodes-base.postgreSql",
+      "typeVersion": 1,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "MATCH (m:memo) WHERE m.category = $1 RETURN m ORDER BY m.timestamp DESC LIMIT 5",
+        "queryParams": "array",
+        "queryParamsArray": [
+          {
+            "type": "string",
+            "value": "={{ $json.category }}"
+          }
+        ],
+        "options": {}
+      },
+      "id": "retrieve-memgraph-relationships",
+      "name": "Retrieve Memgraph Relationships",
+      "type": "n8n-nodes-base.postgreSql",
+      "typeVersion": 1,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "contents": [
+            {
+              "parts": [
+                {
+                  "text": "Given the current message and the retrieved memories, rerank and synthesize the most relevant information. Return a JSON object with 'relevant_memories' (array of top 3 most relevant memories) and 'synthesized_context' (a coherent summary combining the most important information)."
+                }
+              ]
+            },
+            {
+              "parts": [
+                {
+                  "text": "Current message: {{ $json.message }}\nRetrieved memories: {{ $json.similar_memories | toJsonString }}\nCategory: {{ $json.category }}"
+                }
+              ]
+            }
+          ],
+          "generationConfig": {
+            "responseMimeType": "application/json"
+          }
+        },
+        "options": {}
+      },
+      "id": "rerank-and-synthesize",
+      "name": "Rerank and Synthesize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1440, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "object": {
+            "user_id": "={{ $json.user_id }}",
+            "session_id": "={{ $json.session_id }}",
+            "message": "={{ $json.message }}",
+            "category": "={{ $json.category }}",
+            "relevant_memories": "={{ $json.data.candidates[0].content.parts[0].text | parseJson | default({}) | relevant_memories }}",
+            "synthesized_context": "={{ $json.data.candidates[0].content.parts[0].text | parseJson | default({}) | synthesized_context }}",
+            "timestamp": "={{ $json.timestamp }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "prepare-response",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Input Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input Data": {
+      "main": [
+        [
+          {
+            "node": "Classify Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Message": {
+      "main": [
+        [
+          {
+            "node": "Add Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Classification": {
+      "main": [
+        [
+          {
+            "node": "Store in PostgreSQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Rerank and Synthesize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embedding": {
+      "main": [
+        [
+          {
+            "node": "Store in PostgreSQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Retrieve Similar Memories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Vector Extension": {
+      "main": [
+        [
+          {
+            "node": "Create Memory Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Memory Table": {
+      "main": [
+        [
+          {
+            "node": "Store in PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Similar Memories": {
+      "main": [
+        [
+          {
+            "node": "Rerank and Synthesize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Memgraph Relationships": {
+      "main": [
+        [
+          {
+            "node": "Rerank and Synthesize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rerank and Synthesize": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response": {
+      "main": [
+        [
+          {
+            "node": "Store in Memgraph",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "instanceId": "n8n-instance-id"
+  }
+}
