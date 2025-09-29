@@ -72,7 +72,7 @@ docker-compose down
 
 - **Port**: 5432
 - **Database**: `ai_memory`
-- **User**: `memory_user`
+- **User**: `n8n_user`
 - **Features**: Vector storage, full-text search, JSON support
 
 ### Memgraph
@@ -168,7 +168,7 @@ docker-compose logs -f n8n
 
 ```bash
 # PostgreSQL
-docker-compose exec postgres psql -U memory_user -d ai_memory
+docker-compose exec postgres psql -U n8n_user -d ai_memory
 
 # Memgraph (via HTTP)
 curl http://localhost:3000/
@@ -180,7 +180,7 @@ curl http://localhost:3000/
 
 ```bash
 # PostgreSQL
-docker-compose exec postgres pg_dump -U memory_user ai_memory > backup.sql
+docker-compose exec postgres pg_dump -U n8n_user ai_memory > backup.sql
 
 # Memgraph (export via HTTP API)
 curl http://localhost:3000/dump

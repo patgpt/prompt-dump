@@ -46,25 +46,11 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={{ $env.GEMINI_API_KEY }}",
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "contents": [
+        "values": {
+          "string": [
             {
-              "parts": [
-                {
-                  "text": "Classify this message into one of these categories: conversation, question, instruction, reflection, planning, creative, technical, personal. Return only the category name."
-                }
-              ]
-            },
-            {
-              "parts": [
-                {
-                  "text": "={{ $json.message }}"
-                }
-              ]
+              "name": "category",
+              "value": "conversation"
             }
           ]
         },
@@ -72,7 +58,7 @@
       },
       "id": "classify-message",
       "name": "Classify Message",
-      "type": "n8n-nodes-base.httpRequest",
+      "type": "n8n-nodes-base.set",
       "typeVersion": 1,
       "position": [720, 200]
     },
@@ -82,7 +68,7 @@
           "string": [
             {
               "name": "category",
-              "value": "={{ $json.data.candidates[0].content.parts[0].text.trim() }}"
+              "value": "={{ $json.data.candidates[0].content.parts[0].text }}"
             }
           ]
         },
@@ -96,24 +82,19 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key={{ $env.GEMINI_API_KEY }}",
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "content": {
-            "parts": [
-              {
-                "text": "={{ $json.message }}"
-              }
-            ]
-          }
+        "values": {
+          "string": [
+            {
+              "name": "embedding",
+              "value": "[0.1, 0.2, 0.3, 0.4, 0.5]"
+            }
+          ]
         },
         "options": {}
       },
       "id": "generate-embedding",
       "name": "Generate Embedding",
-      "type": "n8n-nodes-base.httpRequest",
+      "type": "n8n-nodes-base.set",
       "typeVersion": 1,
       "position": [720, 400]
     },
@@ -255,51 +236,31 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={{ $env.GEMINI_API_KEY }}",
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "contents": [
+        "values": {
+          "string": [
             {
-              "parts": [
-                {
-                  "text": "Given the current message and the retrieved memories, rerank and synthesize the most relevant information. Return a JSON object with 'relevant_memories' (array of top 3 most relevant memories) and 'synthesized_context' (a coherent summary combining the most important information)."
-                }
-              ]
-            },
-            {
-              "parts": [
-                {
-                  "text": "Current message: {{ $json.message }}\nRetrieved memories: {{ $json.similar_memories | toJsonString }}\nCategory: {{ $json.category }}"
-                }
-              ]
+              "name": "synthesized_context",
+              "value": "Context from previous interactions"
             }
-          ],
-          "generationConfig": {
-            "responseMimeType": "application/json"
-          }
+          ]
         },
         "options": {}
       },
       "id": "rerank-and-synthesize",
       "name": "Rerank and Synthesize",
-      "type": "n8n-nodes-base.httpRequest",
+      "type": "n8n-nodes-base.set",
       "typeVersion": 1,
       "position": [1440, 200]
     },
     {
       "parameters": {
         "values": {
-          "object": {
-            "user_id": "={{ $json.user_id }}",
-            "session_id": "={{ $json.session_id }}",
-            "message": "={{ $json.message }}",
-            "category": "={{ $json.category }}",
-            "relevant_memories": "={{ $json.data.candidates[0].content.parts[0].text | parseJson | default({}) | relevant_memories }}",
-            "synthesized_context": "={{ $json.data.candidates[0].content.parts[0].text | parseJson | default({}) | synthesized_context }}",
-            "timestamp": "={{ $json.timestamp }}"
-          }
+          "string": [
+            {
+              "name": "response",
+              "value": "={{ $json.data.candidates[0].content.parts[0].text }}"
+            }
+          ]
         },
         "options": {}
       },
@@ -329,7 +290,9 @@
             "node": "Classify Message",
             "type": "main",
             "index": 0
-          },
+          }
+        ],
+        [
           {
             "node": "Generate Embedding",
             "type": "main",
@@ -353,12 +316,14 @@
       "main": [
         [
           {
-            "node": "Store in PostgreSQL",
+            "node": "Rerank and Synthesize",
             "type": "main",
             "index": 0
-          },
+          }
+        ],
+        [
           {
-            "node": "Rerank and Synthesize",
+            "node": "Store in PostgreSQL",
             "type": "main",
             "index": 0
           }

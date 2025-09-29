@@ -1,13 +1,21 @@
 -- Initialize AI Memory Database
 
+-- Create user if it doesn't exist (for safety)
+DO $$
+BEGIN
+   IF NOT EXISTS (
+      SELECT FROM pg_catalog.pg_roles
+      WHERE  rolname = 'n8n_user') THEN
+      CREATE USER n8n_user WITH PASSWORD 'n8n_password';
+   END IF;
+END
+$$;
+
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS uuid-ossp;
 
--- Create user for n8n
-CREATE USER n8n_user WITH PASSWORD 'n8n_password';
-
--- Grant permissions
+-- Grant permissions to n8n_user on ai_memory database
 GRANT ALL PRIVILEGES ON DATABASE ai_memory TO n8n_user;
 
 -- Switch to ai_memory database
